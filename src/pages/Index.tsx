@@ -73,6 +73,60 @@ const Index = () => {
     return name.split(' ').map(n => n[0]).join('');
   };
 
+  const autoDistributeShifts = () => {
+    const activeEmps = employees.filter(emp => emp.status === 'active');
+    if (activeEmps.length === 0) return;
+
+    const today = new Date();
+    const daysToSchedule = 30;
+    const newShifts: Shift[] = [];
+    const employeeHours: { [key: number]: number } = {};
+    
+    activeEmps.forEach(emp => {
+      employeeHours[emp.id] = 0;
+    });
+
+    for (let day = 0; day < daysToSchedule; day++) {
+      const currentDate = new Date(today);
+      currentDate.setDate(today.getDate() + day);
+      
+      const sortedEmployees = activeEmps.sort((a, b) => 
+        (employeeHours[a.id] || 0) - (employeeHours[b.id] || 0)
+      );
+      
+      const shiftTypes: ShiftType[] = day % 7 === 5 || day % 7 === 6 ? ['off'] : ['day', 'night'];
+      
+      shiftTypes.forEach((shiftType, index) => {
+        if (index < sortedEmployees.length) {
+          const employee = sortedEmployees[index];
+          const hours = shiftType === 'day' ? 8 : shiftType === 'night' ? 10 : 0;
+          
+          newShifts.push({
+            employeeId: employee.id,
+            date: new Date(currentDate),
+            type: shiftType,
+            hours: hours
+          });
+          
+          employeeHours[employee.id] += hours;
+        }
+      });
+    }
+
+    setShifts(newShifts);
+    
+    const updatedEmployees = employees.map(emp => {
+      const totalHours = employeeHours[emp.id] || emp.hoursThisMonth;
+      return {
+        ...emp,
+        hoursThisMonth: totalHours,
+        hoursThisWeek: Math.min(totalHours, 40)
+      };
+    });
+    
+    setEmployees(updatedEmployees);
+  };
+
   const totalHoursThisMonth = employees.reduce((sum, emp) => sum + emp.hoursThisMonth, 0);
   const activeEmployees = employees.filter(emp => emp.status === 'active').length;
   const onVacation = employees.filter(emp => emp.status === 'vacation').length;
@@ -89,13 +143,23 @@ const Index = () => {
               </h1>
               <p className="text-muted-foreground">Система управления графиком и сменами</p>
             </div>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90">
-                  <Icon name="Plus" className="mr-2 h-4 w-4" />
-                  Добавить сотрудника
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-3">
+              <Button 
+                onClick={autoDistributeShifts}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                <Icon name="Shuffle" className="mr-2 h-4 w-4" />
+                Распределить смены
+              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-primary/90">
+                    <Icon name="Plus" className="mr-2 h-4 w-4" />
+                    Добавить сотрудника
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
+            </div>
               <DialogContent className="bg-card border-border">
                 <DialogHeader>
                   <DialogTitle>Новый сотрудник</DialogTitle>
@@ -126,7 +190,6 @@ const Index = () => {
                   <Button className="w-full bg-primary hover:bg-primary/90">Добавить</Button>
                 </div>
               </DialogContent>
-            </Dialog>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
